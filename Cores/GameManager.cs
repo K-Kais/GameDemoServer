@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Net.WebSockets;
 using System.Text.Json;
+using GameDemoServer.Models;
 
 namespace GameDemoServer.Cores;
 
@@ -9,10 +10,11 @@ public sealed class GameManager
     private const int MaxPlayersPerMap = 100;
     private const string DefaultMapId = "world";
 
-    private readonly ConcurrentDictionary<string, PlayerSession> _players = new();
+    private readonly ConcurrentDictionary<string, EntityDataServer> _players = new();
     private readonly ConcurrentDictionary<string, WebSocket> _connections = new();
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _sendLocks = new();
     private readonly ConcurrentDictionary<string, Map> _maps = new();
+    private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, InputSyncItem>> _pendingInputByMap = new();
     private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web);
     private readonly object _mapLock = new();
     private readonly ILogger<GameManager> _logger;
@@ -34,7 +36,7 @@ public sealed class GameManager
 
         _players.AddOrUpdate(
             playerId,
-            _ => new PlayerSession(playerId, userName),
+            _ => new EntityDataServer(playerId, userName),
             (_, existing) =>
             {
                 existing.UserName = userName;
@@ -62,6 +64,7 @@ public sealed class GameManager
             if (previousMapId is not null && _maps.TryGetValue(previousMapId, out var previousMap))
             {
                 previousMap.RemovePlayer(playerId, out _);
+                RemovePendingInput(previousMapId, playerId);
             }
 
             var targetMap = GetOrCreateTargetMap(baseMapId);
@@ -118,6 +121,53 @@ public sealed class GameManager
         return true;
     }
 
+    public bool TryUpdatePlayerInput(
+        string playerId,
+        float x,
+        float y,
+        float dirX,
+        float dirY,
+        string state,
+        out string? mapId)
+    {
+        mapId = null;
+        if (!_players.TryGetValue(playerId, out var player))
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(player.CurrentMapId))
+        {
+            return false;
+        }
+
+        if (!_maps.TryGetValue(player.CurrentMapId, out var map))
+        {
+            return false;
+        }
+
+        var normalizedState = state?.Trim() ?? string.Empty;
+        if (!map.TryUpdateInput(playerId, x, y, dirX, dirY, normalizedState, out var changed))
+        {
+            return false;
+        }
+
+        mapId = map.MapId;
+
+        if (!changed)
+        {
+            return true;
+        }
+
+        player.X = x;
+        player.Y = y;
+        player.DirX = dirX;
+        player.DirY = dirY;
+        player.State = normalizedState;
+        EnqueueInputSync(map.MapId, playerId, x, y, dirX, dirY, normalizedState);
+        return true;
+    }
+
     public PlayerDisconnectInfo? RemoveConnection(string playerId)
     {
         _connections.TryRemove(playerId, out var socket);
@@ -131,6 +181,7 @@ public sealed class GameManager
         if (!string.IsNullOrWhiteSpace(player.CurrentMapId) && _maps.TryGetValue(player.CurrentMapId, out var map))
         {
             map.RemovePlayer(playerId, out _);
+            RemovePendingInput(player.CurrentMapId, playerId);
         }
 
         if (socket is not null)
@@ -149,6 +200,56 @@ public sealed class GameManager
         }
 
         return Array.Empty<MapPlayerSnapshot>();
+    }
+
+    public async Task FlushPendingInputSyncAsync(CancellationToken cancellationToken = default)
+    {
+        foreach (var pending in _pendingInputByMap)
+        {
+            var mapPending = pending.Value;
+            if (mapPending.IsEmpty)
+            {
+                _pendingInputByMap.TryRemove(pending.Key, out _);
+                continue;
+            }
+
+            var items = new InputSyncItem[mapPending.Count];
+            var index = 0;
+            foreach (var playerSync in mapPending)
+            {
+                if (!mapPending.TryRemove(playerSync.Key, out var syncItem))
+                {
+                    continue;
+                }
+
+                items[index++] = syncItem;
+            }
+
+            if (index == 0)
+            {
+                continue;
+            }
+
+            if (index != items.Length)
+            {
+                Array.Resize(ref items, index);
+            }
+
+            await BroadcastToMapAsync(
+                pending.Key,
+                OpCode.Input,
+                new InputBatchMessage
+                {
+                    MapId = pending.Key,
+                    Players = items
+                },
+                cancellationToken: cancellationToken);
+
+            if (mapPending.IsEmpty)
+            {
+                _pendingInputByMap.TryRemove(pending.Key, out _);
+            }
+        }
     }
 
     public async Task SendToPlayerAsync(string playerId, OpCode opCode, object payload, CancellationToken cancellationToken = default)
@@ -262,6 +363,39 @@ public sealed class GameManager
         }
 
         return mapId.Trim().ToLowerInvariant();
+    }
+
+    private void EnqueueInputSync(string mapId, string playerId, float x, float y, float dirX, float dirY, string state)
+    {
+        var mapPending = _pendingInputByMap.GetOrAdd(mapId, _ => new ConcurrentDictionary<string, InputSyncItem>());
+        mapPending[playerId] = new InputSyncItem
+        {
+            PlayerId = playerId,
+            X = x,
+            Y = y,
+            DirX = dirX,
+            DirY = dirY,
+            State = state
+        };
+    }
+
+    private void RemovePendingInput(string? mapId, string playerId)
+    {
+        if (string.IsNullOrWhiteSpace(mapId))
+        {
+            return;
+        }
+
+        if (!_pendingInputByMap.TryGetValue(mapId, out var mapPending))
+        {
+            return;
+        }
+
+        mapPending.TryRemove(playerId, out _);
+        if (mapPending.IsEmpty)
+        {
+            _pendingInputByMap.TryRemove(mapId, out _);
+        }
     }
 
     private byte[] BuildFrame(OpCode opCode, object payload)

@@ -10,6 +10,7 @@ builder.Services.AddSingleton<TokenService>();
 builder.Services.AddSingleton<AuthService>();
 builder.Services.AddSingleton<GameManager>();
 builder.Services.AddSingleton<DatabaseInitializer>();
+builder.Services.AddHostedService<InputSyncBroadcastService>();
 
 var connectionString = builder.Configuration.GetConnectionString("PostgreSQL")
     ?? throw new InvalidOperationException("Connection string 'PostgreSQL' was not found.");

@@ -10,5 +10,7 @@ public enum OpCode : byte
     Move = 5,
     MapSnapshot = 6,
     Chat = 7,
+    Input = 8,
+    Test,
     Error = 255
 }

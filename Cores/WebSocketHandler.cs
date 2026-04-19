@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IdentityModel.Tokens.Jwt;
 using System.Net.WebSockets;
 using System.Security.Claims;
@@ -73,6 +74,7 @@ public sealed class WebSocketHandler
             new
             {
                 mapId = map.MapId,
+                selfPlayerId = playerId,
                 players = _gameManager.GetMapSnapshot(map.MapId)
             },
             context.RequestAborted);
@@ -110,23 +112,38 @@ public sealed class WebSocketHandler
         string userName,
         CancellationToken cancellationToken)
     {
-        while (socket.State == WebSocketState.Open && !cancellationToken.IsCancellationRequested)
+        try
         {
-            var frame = await ReceiveFrameAsync(socket, cancellationToken);
-            if (frame is null)
+            while (socket.State == WebSocketState.Open && !cancellationToken.IsCancellationRequested)
             {
-                return;
+                var frame = await ReceiveFrameAsync(socket, cancellationToken);
+                if (frame is null)
+                {
+                    return;
+                }
+
+                if (frame.Length == 0)
+                {
+                    continue;
+                }
+
+                var opCode = (OpCode)frame[0];
+                var payload = frame.Length > 1 ? frame[1..] : Array.Empty<byte>();
+
+                await HandleMessageAsync(playerId, userName, opCode, payload, cancellationToken);
             }
-
-            if (frame.Length == 0)
-            {
-                continue;
-            }
-
-            var opCode = (OpCode)frame[0];
-            var payload = frame.Length > 1 ? frame[1..] : Array.Empty<byte>();
-
-            await HandleMessageAsync(playerId, userName, opCode, payload, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            // Request aborted or app shutdown.
+        }
+        catch (WebSocketException ex)
+        {
+            _logger.LogDebug(ex, "WebSocket closed unexpectedly: {PlayerId}", playerId);
+        }
+        catch (ObjectDisposedException ex)
+        {
+            _logger.LogDebug(ex, "WebSocket already disposed: {PlayerId}", playerId);
         }
     }
 
@@ -139,6 +156,23 @@ public sealed class WebSocketHandler
     {
         switch (opCode)
         {
+            case OpCode.Test:
+                {
+                    var message = ParseTestMessage(payload);
+
+                    await _gameManager.SendToPlayerAsync(
+                        playerId,
+                        OpCode.Test,
+                        new
+                        {
+                            playerId,
+                            userName,
+                            message,
+                            serverTimeUtc = DateTime.UtcNow
+                        },
+                        cancellationToken);
+                    return;
+                }
             case OpCode.Ping:
                 await _gameManager.SendToPlayerAsync(
                     playerId,
@@ -148,90 +182,115 @@ public sealed class WebSocketHandler
                 return;
 
             case OpCode.JoinMap:
-            {
-                var request = Deserialize<JoinMapRequest>(payload) ?? new JoinMapRequest();
-                var targetMap = _gameManager.MovePlayerToMap(playerId, request.MapId, out var previousMapId);
-
-                if (!string.IsNullOrWhiteSpace(previousMapId) &&
-                    !string.Equals(previousMapId, targetMap.MapId, StringComparison.OrdinalIgnoreCase))
                 {
-                    await _gameManager.BroadcastToMapAsync(
-                        previousMapId,
-                        OpCode.PlayerLeftMap,
-                        new { playerId, userName, mapId = previousMapId },
-                        cancellationToken: cancellationToken);
-                }
+                    var request = Deserialize<JoinMapRequest>(payload) ?? new JoinMapRequest();
+                    var targetMap = _gameManager.MovePlayerToMap(playerId, request.MapId, out var previousMapId);
 
-                await _gameManager.BroadcastToMapAsync(
-                    targetMap.MapId,
-                    OpCode.PlayerJoinedMap,
-                    new { playerId, userName, mapId = targetMap.MapId },
-                    exceptPlayerId: playerId,
-                    cancellationToken: cancellationToken);
-
-                await _gameManager.SendToPlayerAsync(
-                    playerId,
-                    OpCode.MapSnapshot,
-                    new
+                    if (!string.IsNullOrWhiteSpace(previousMapId) &&
+                        !string.Equals(previousMapId, targetMap.MapId, StringComparison.OrdinalIgnoreCase))
                     {
-                        mapId = targetMap.MapId,
-                        players = _gameManager.GetMapSnapshot(targetMap.MapId)
-                    },
-                    cancellationToken);
-                return;
-            }
+                        await _gameManager.BroadcastToMapAsync(
+                            previousMapId,
+                            OpCode.PlayerLeftMap,
+                            new { playerId, userName, mapId = previousMapId },
+                            cancellationToken: cancellationToken);
+                    }
 
-            case OpCode.Move:
-            {
-                var request = Deserialize<MoveRequest>(payload);
-                if (request is null)
-                {
-                    await SendErrorAsync(playerId, "Invalid move payload", cancellationToken);
-                    return;
-                }
-
-                if (_gameManager.TryUpdatePlayerPosition(playerId, request.X, request.Y, out var mapId) && mapId is not null)
-                {
                     await _gameManager.BroadcastToMapAsync(
-                        mapId,
-                        OpCode.Move,
-                        new { playerId, x = request.X, y = request.Y },
+                        targetMap.MapId,
+                        OpCode.PlayerJoinedMap,
+                        new { playerId, userName, mapId = targetMap.MapId },
                         exceptPlayerId: playerId,
                         cancellationToken: cancellationToken);
+
+                    await _gameManager.SendToPlayerAsync(
+                        playerId,
+                        OpCode.MapSnapshot,
+                        new
+                        {
+                            mapId = targetMap.MapId,
+                            selfPlayerId = playerId,
+                            players = _gameManager.GetMapSnapshot(targetMap.MapId)
+                        },
+                        cancellationToken);
+                    return;
                 }
 
-                return;
-            }
+            case OpCode.Move:
+                {
+                    var request = Deserialize<MoveRequest>(payload);
+                    if (request is null)
+                    {
+                        await SendErrorAsync(playerId, "Invalid move payload", cancellationToken);
+                        return;
+                    }
+
+                    if (_gameManager.TryUpdatePlayerPosition(playerId, request.X, request.Y, out var mapId) && mapId is not null)
+                    {
+                        await _gameManager.BroadcastToMapAsync(
+                            mapId,
+                            OpCode.Move,
+                            new { playerId, x = request.X, y = request.Y },
+                            exceptPlayerId: playerId,
+                            cancellationToken: cancellationToken);
+                    }
+
+                    return;
+                }
 
             case OpCode.Chat:
-            {
-                var request = Deserialize<ChatRequest>(payload);
-                if (request is null || string.IsNullOrWhiteSpace(request.Message))
                 {
-                    await SendErrorAsync(playerId, "Message cannot be empty", cancellationToken);
-                    return;
-                }
-
-                var mapId = _gameManager.GetCurrentMapId(playerId);
-                if (mapId is null)
-                {
-                    await SendErrorAsync(playerId, "Player is not in a map", cancellationToken);
-                    return;
-                }
-
-                await _gameManager.BroadcastToMapAsync(
-                    mapId,
-                    OpCode.Chat,
-                    new
+                    var request = Deserialize<ChatRequest>(payload);
+                    if (request is null || string.IsNullOrWhiteSpace(request.Message))
                     {
-                        from = playerId,
-                        userName,
-                        message = request.Message.Trim(),
-                        sentAtUtc = DateTime.UtcNow
-                    },
-                    cancellationToken: cancellationToken);
-                return;
-            }
+                        await SendErrorAsync(playerId, "Message cannot be empty", cancellationToken);
+                        return;
+                    }
+
+                    var mapId = _gameManager.GetCurrentMapId(playerId);
+                    if (mapId is null)
+                    {
+                        await SendErrorAsync(playerId, "Player is not in a map", cancellationToken);
+                        return;
+                    }
+
+                    await _gameManager.BroadcastToMapAsync(
+                        mapId,
+                        OpCode.Chat,
+                        new
+                        {
+                            from = playerId,
+                            userName,
+                            message = request.Message.Trim(),
+                            sentAtUtc = DateTime.UtcNow
+                        },
+                        cancellationToken: cancellationToken);
+                    return;
+                }
+
+            case OpCode.Input:
+                {
+                    var request = Deserialize<EntitySyncData>(payload);
+                    if (request is null)
+                    {
+                        await SendErrorAsync(playerId, "Invalid input payload", cancellationToken);
+                        return;
+                    }
+
+                    if (!_gameManager.TryUpdatePlayerInput(
+                            playerId,
+                            request.X,
+                            request.Y,
+                            request.DirX,
+                            request.DirY,
+                            request.State,
+                            out _))
+                    {
+                        await SendErrorAsync(playerId, "Player is not in a map", cancellationToken);
+                    }
+
+                    return;
+                }
 
             default:
                 await SendErrorAsync(playerId, $"Unsupported opcode: {(byte)opCode}", cancellationToken);
@@ -259,6 +318,38 @@ public sealed class WebSocketHandler
         {
             return null;
         }
+    }
+
+    private static string ParseTestMessage(byte[] payload)
+    {
+        if (payload.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(payload);
+            var root = document.RootElement;
+
+            if (root.ValueKind == JsonValueKind.String)
+            {
+                return root.GetString() ?? string.Empty;
+            }
+
+            if (root.ValueKind == JsonValueKind.Object &&
+                root.TryGetProperty("message", out var messageElement) &&
+                messageElement.ValueKind == JsonValueKind.String)
+            {
+                return messageElement.GetString() ?? string.Empty;
+            }
+        }
+        catch (JsonException)
+        {
+            // Fallback for non-JSON text payloads.
+        }
+
+        return Encoding.UTF8.GetString(payload);
     }
 
     private static async Task<byte[]?> ReceiveFrameAsync(WebSocket socket, CancellationToken cancellationToken)
