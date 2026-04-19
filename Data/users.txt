@@ -6,3 +6,12 @@
 6	authmenuui	$2a$11$mzFxIJ9hNRaPxfPfp0qZ9ubR6fKwSj1th0nTZ.nEWMrz13nF1OeMi	AuthMenuUI	authmenuui
 7	characterselectionmenu	$2a$11$0v9RKZ9lj3fVPyHKyylJT.RjlVgkzCYR4VC1q/Y3BFcrq04Sbbjg2	Character	character
 8	authmenuui1	$2a$11$1Uz3sJhw3Cke7g9Zeb8T1OL/UMx886SJejY7zzDbBkELxw4O1GkXu	AuthMenuUI1	authmenuui1
+9	controlsbottomui	$2a$11$s/gUrAg5zGB1hrhh5GUtHOItpWSOs0foC/fUf1Ss9RifqtIWrI3dy	sdasd	sdasd
+10	controlsbottomui1	$2a$11$Z1EycKDqgZZ85ecMST077u/acJbcqxYqH3DBWeStDiacPcyAwbgOe	sdasdweqwe	sdasdweqwe
+11	controlsbottomui13	$2a$11$c0xvJ8Ptb6Sa83y4SMZywOutSWwfV7l7b9v0YLNHocKAie11p2lxK	asdasda	asdasda
+12	controlsbottomui12	$2a$11$3PA/E7ayjVtff112/auau.TqJTUZTDLhVjTEoeSvykFjSRj0QzhHe	ControlsBott	controlsbott
+13	controlsb	$2a$11$nsuQyRUaMCKddY74AzCkWOCAhIqk2N5wR.DJqnkkK2WeSOpexrKPi	ControlsB	controlsb
+14	controlsb1	$2a$11$xtpZLpAjuZ.GGmDRgfU0BOV3hFKDqZ3aQPN1MNETgWcq8T9HFBGx6	ControlsB1	controlsb1
+15	controls	$2a$11$/SsuYvaP6NNbJMSEVsKf6ePYJAgGAXpFvvARVEp6BFt95Fjt5uH1C	Controls	controls
+16	controls1	$2a$11$Ru2oHDBZZqQ7yj8s/vBWdu3hB11KJiKm.4gCPzBfLLS5onG1zfRSm	Controls1	controls1
+17	authmenuui5	$2a$11$sPUBvNi9Dzs.aT3kBCTIw.zPISu7hJ/FJhmIw9M.sLWMmlAJdSnj.	AuthMenuUI5	authmenuui5

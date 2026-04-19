@@ -1,0 +1,25 @@
+docker container ls
+
+docker stop GameDemoServer
+
+docker pull tranbinh0708/gamedemoserver ; screen docker run -d --name GameDemoServer -p 5002:8080 -e ASPNETCORE_ENVIRONMENT=ServerDev tranbinh0708/gamedemoserver
+
+
+
+docker stop GameDemoServer 2>/dev/null || true && docker pull tranbinh0708/gamedemoserver && screen docker run -p 5002:5002 --name GameDemoServer tranbinh0708/gamedemoserver
+
+docker stop GameDemoServer; docker pull tranbinh0708/gamedemoserver ; screen docker run -p 5002:5002 --name GameDemoServer tranbinh0708/gamedemoserver
+
+docker stop $(docker ps -q); docker pull tranbinh0708/gamedemoserver ; screen docker run -p 5002:5002 --name GameDemoServer tranbinh0708/gamedemoserver
+
+
+#go inside docker
+
+ssh root@45.32.107.220
+# password: $w8Mjo6x+?3$NJsQ
+
+docker exec -it $(docker ps -q -n 1) /bin/sh
+
+
+screen docker run -p 5002:5002 tranbinh0708/gamedemoserver
+

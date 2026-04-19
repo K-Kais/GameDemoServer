@@ -1,4 +1,4 @@
-@GameDemoServer_HostAddress = http://localhost:5268
+@GameDemoServer_HostAddress = http://0.0.0.0:5002
 
 GET {{GameDemoServer_HostAddress}}/api/hello
 Accept: application/json
