@@ -1,0 +1,8 @@
+1	demo_user	$2a$11$MlGo4l/C9CsaxzrQIJjMue3FgnGAsM4tU.knngoGcqE5VpZY4coY6		
+2	demouser	$2a$11$KfHk4mCVhKnrBWht4/R8ne0NqfvcIw.eMiiTR/IdLJ0rvhzf8TXji	HiHI	hihi
+3	demouser1	$2a$11$CfE7.qUzGqUg2hbtqDSiZe01IKNNB6pU6AAfJg6fiUoHQF9svctuy		
+4	heonhu1	$2a$11$BWfSXL8TmDFFabTo/aq1DeXSzxZVG1LB7OL2gFtVZPrraew1QGd9u	HeoNhu1	heonhu1
+5	heonhu2	$2a$11$.RMg5AnjyXa5Ma5mGm70Cu2S1PiqslBbsTB6F3CCIFH8VVRMVAUEK	HeoNhu2	heonhu2
+6	authmenuui	$2a$11$mzFxIJ9hNRaPxfPfp0qZ9ubR6fKwSj1th0nTZ.nEWMrz13nF1OeMi	AuthMenuUI	authmenuui
+7	characterselectionmenu	$2a$11$0v9RKZ9lj3fVPyHKyylJT.RjlVgkzCYR4VC1q/Y3BFcrq04Sbbjg2	Character	character
+8	authmenuui1	$2a$11$1Uz3sJhw3Cke7g9Zeb8T1OL/UMx886SJejY7zzDbBkELxw4O1GkXu	AuthMenuUI1	authmenuui1

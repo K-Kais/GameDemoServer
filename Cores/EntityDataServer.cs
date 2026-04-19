@@ -69,20 +69,33 @@ public sealed class EntityDataServer
 
     public void QueueInput(EntitySyncData input)
     {
+        if (input is null)
+        {
+            return;
+        }
+
         lock (_inputLock)
         {
-            _pendingInput = new EntitySyncData
+            if (_pendingInput is null)
             {
-                X = input.X,
-                Y = input.Y,
-                DirX = input.DirX,
-                DirY = input.DirY,
-                CharacterIndex = input.CharacterIndex,
-                State = input.State,
-                AttackEvent = input.AttackEvent,
-                AttackHitEvent = input.AttackHitEvent,
-                RespawnEvent = input.RespawnEvent
-            };
+                _pendingInput = new EntitySyncData();
+            }
+
+            _pendingInput.X = input.X;
+            _pendingInput.Y = input.Y;
+            _pendingInput.DirX = input.DirX;
+            _pendingInput.DirY = input.DirY;
+            _pendingInput.State = input.State;
+
+            if (input.CharacterIndex.HasValue)
+            {
+                _pendingInput.CharacterIndex = input.CharacterIndex;
+            }
+
+            // Preserve one-shot events until ECS consumes pending input.
+            _pendingInput.AttackEvent |= input.AttackEvent;
+            _pendingInput.AttackHitEvent |= input.AttackHitEvent;
+            _pendingInput.RespawnEvent |= input.RespawnEvent;
         }
     }
 

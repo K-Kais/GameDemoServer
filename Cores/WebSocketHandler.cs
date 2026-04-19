@@ -13,6 +13,7 @@ public sealed class WebSocketHandler
 {
     private readonly RequestDelegate _next;
     private readonly GameManager _gameManager;
+    private readonly AuthService _authService;
     private readonly TokenService _tokenService;
     private readonly ILogger<WebSocketHandler> _logger;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -20,11 +21,13 @@ public sealed class WebSocketHandler
     public WebSocketHandler(
         RequestDelegate next,
         GameManager gameManager,
+        AuthService authService,
         TokenService tokenService,
         ILogger<WebSocketHandler> logger)
     {
         _next = next;
         _gameManager = gameManager;
+        _authService = authService;
         _tokenService = tokenService;
         _logger = logger;
     }
@@ -62,7 +65,26 @@ public sealed class WebSocketHandler
             return;
         }
 
-        var userName = principal.FindFirstValue(ClaimTypes.Name) ?? playerId;
+        AuthUserProfile? profile = null;
+        var foundProfile = await _authService.TryGetUserProfileAsync(
+            playerId,
+            context.RequestAborted,
+            user => profile = user);
+        if (!foundProfile || profile is null)
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            await context.Response.WriteAsync("Invalid user profile");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(profile.CharacterName))
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            await context.Response.WriteAsync("Bạn cần tạo nhân vật trước khi vào game");
+            return;
+        }
+
+        var userName = profile.CharacterName;
         using var socket = await context.WebSockets.AcceptWebSocketAsync();
 
         _gameManager.AddConnection(playerId, userName, socket);
