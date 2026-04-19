@@ -14,6 +14,13 @@ public sealed class PlayerSystem : SystemECS
 
         EnsureCombatStats(data);
 
+        if (data.CurrentHp <= 0f &&
+            input.CharacterIndex.HasValue &&
+            input.CharacterIndex.Value >= 0)
+        {
+            data.CharacterIndex = input.CharacterIndex.Value;
+        }
+
         if (input.RespawnEvent && data.CurrentHp <= 0f)
         {
             data.CurrentHp = data.MaxHp;
