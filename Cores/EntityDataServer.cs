@@ -9,6 +9,18 @@ public class SystemECS
     }
 }
 
+public sealed class EntityCombatData
+{
+    public const float DefaultAttackRange = 6f;
+    public const float DefaultMaxHp = 100f;
+    public const float DefaultDamage = 10f;
+
+    public float AttackRange { get; set; } = DefaultAttackRange;
+    public float CurrentHp { get; set; } = DefaultMaxHp;
+    public float MaxHp { get; set; } = DefaultMaxHp;
+    public float Damage { get; set; } = DefaultDamage;
+}
+
 public sealed class EntityDataServer
 {
     private const float SyncEpsilon = 0.0001f;
@@ -23,10 +35,27 @@ public sealed class EntityDataServer
     public float Y { get; set; }
     public float DirX { get; set; }
     public float DirY { get; set; }
+    public int CharacterIndex { get; set; } = -1;
     public string State { get; set; } = string.Empty;
-    public float CurrentHp;
-    public float MaxHp;
-    public float Damage;
+    public EntityCombatData CombatData { get; } = new();
+
+    public float CurrentHp
+    {
+        get => CombatData.CurrentHp;
+        set => CombatData.CurrentHp = value;
+    }
+
+    public float MaxHp
+    {
+        get => CombatData.MaxHp;
+        set => CombatData.MaxHp = value;
+    }
+
+    public float Damage
+    {
+        get => CombatData.Damage;
+        set => CombatData.Damage = value;
+    }
 
     public SystemECS system { get; } = new PlayerSystem();
 
@@ -36,9 +65,6 @@ public sealed class EntityDataServer
     {
         PlayerId = playerId;
         UserName = userName;
-        MaxHp = 100f;
-        CurrentHp = 100f;
-        Damage = 10f;
     }
 
     public void QueueInput(EntitySyncData input)
@@ -51,6 +77,7 @@ public sealed class EntityDataServer
                 Y = input.Y,
                 DirX = input.DirX,
                 DirY = input.DirY,
+                CharacterIndex = input.CharacterIndex,
                 State = input.State,
                 AttackEvent = input.AttackEvent,
                 AttackHitEvent = input.AttackHitEvent,
@@ -92,6 +119,7 @@ public sealed class EntityDataServer
             MathF.Abs(Y - input.Y) > SyncEpsilon ||
             MathF.Abs(DirX - input.DirX) > SyncEpsilon ||
             MathF.Abs(DirY - input.DirY) > SyncEpsilon ||
+            (input.CharacterIndex.HasValue && input.CharacterIndex.Value >= 0 && CharacterIndex != input.CharacterIndex.Value) ||
             !string.Equals(State, normalizedState, StringComparison.Ordinal);
 
         if (!changed)
@@ -103,6 +131,11 @@ public sealed class EntityDataServer
         Y = input.Y;
         DirX = input.DirX;
         DirY = input.DirY;
+        if (input.CharacterIndex.HasValue && input.CharacterIndex.Value >= 0)
+        {
+            CharacterIndex = input.CharacterIndex.Value;
+        }
+
         State = normalizedState;
         input.State = normalizedState;
         return true;
@@ -123,6 +156,7 @@ public sealed record MapPlayerSnapshot(
     float Y,
     float DirX,
     float DirY,
+    int CharacterIndex,
     string State,
     float CurrentHp,
     float MaxHp);

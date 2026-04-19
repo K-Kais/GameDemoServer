@@ -4,10 +4,6 @@ namespace GameDemoServer.Cores;
 
 public sealed class PlayerSystem : SystemECS
 {
-    private const float DefaultAttackRange = 3.5f;
-    private const float DefaultMaxHp = 100f;
-    private const float DefaultDamage = 10f;
-
     public override void Update(EntityDataServer data, Map map, float deltaTime)
     {
         data.TryConsumeInput(out var input);
@@ -29,6 +25,7 @@ public sealed class PlayerSystem : SystemECS
                 Y = data.Y,
                 DirX = data.DirX,
                 DirY = data.DirY,
+                CharacterIndex = data.CharacterIndex,
                 State = data.State,
                 AttackEvent = false,
                 CurrentHp = data.CurrentHp,
@@ -47,6 +44,7 @@ public sealed class PlayerSystem : SystemECS
                 Y = data.Y,
                 DirX = data.DirX,
                 DirY = data.DirY,
+                CharacterIndex = data.CharacterIndex,
                 State = data.State,
                 AttackEvent = false,
                 CurrentHp = data.CurrentHp,
@@ -68,6 +66,7 @@ public sealed class PlayerSystem : SystemECS
             Y = data.Y,
             DirX = data.DirX,
             DirY = data.DirY,
+            CharacterIndex = data.CharacterIndex,
             State = data.State,
             AttackEvent = input.AttackEvent,
             CurrentHp = data.CurrentHp,
@@ -79,7 +78,7 @@ public sealed class PlayerSystem : SystemECS
             return;
         }
 
-        var attackTarget = FindAttackTarget(data, map, DefaultAttackRange);
+        var attackTarget = FindAttackTarget(data, map, data.CombatData.AttackRange);
         if (attackTarget is null)
         {
             return;
@@ -98,6 +97,7 @@ public sealed class PlayerSystem : SystemECS
             Y = attackTarget.Y,
             DirX = attackTarget.DirX,
             DirY = attackTarget.DirY,
+            CharacterIndex = attackTarget.CharacterIndex,
             State = attackTarget.State,
             AttackEvent = false,
             CurrentHp = attackTarget.CurrentHp,
@@ -164,18 +164,23 @@ public sealed class PlayerSystem : SystemECS
 
     private static void EnsureCombatStats(EntityDataServer data)
     {
-        if (data.MaxHp <= 0f)
+        if (data.CombatData.MaxHp <= 0f)
         {
-            data.MaxHp = DefaultMaxHp;
-            if (data.CurrentHp <= 0f)
+            data.CombatData.MaxHp = EntityCombatData.DefaultMaxHp;
+            if (data.CombatData.CurrentHp <= 0f)
             {
-                data.CurrentHp = data.MaxHp;
+                data.CombatData.CurrentHp = data.CombatData.MaxHp;
             }
         }
 
-        if (data.Damage <= 0f)
+        if (data.CombatData.Damage <= 0f)
         {
-            data.Damage = DefaultDamage;
+            data.CombatData.Damage = EntityCombatData.DefaultDamage;
+        }
+
+        if (data.CombatData.AttackRange <= 0f)
+        {
+            data.CombatData.AttackRange = EntityCombatData.DefaultAttackRange;
         }
     }
 }

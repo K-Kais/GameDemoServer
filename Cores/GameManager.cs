@@ -365,6 +365,11 @@ public sealed class GameManager
                 if (AnimationStateNames.IsDead(syncItem.State))
                 {
                     syncItem.AttackEvent = false;
+                    if (syncItem.CharacterIndex < 0 && existing.CharacterIndex >= 0)
+                    {
+                        syncItem.CharacterIndex = existing.CharacterIndex;
+                    }
+
                     return syncItem;
                 }
 
@@ -373,6 +378,11 @@ public sealed class GameManager
                     !AnimationStateNames.IsDead(existing.State))
                 {
                     syncItem.AttackEvent = true;
+                }
+
+                if (syncItem.CharacterIndex < 0 && existing.CharacterIndex >= 0)
+                {
+                    syncItem.CharacterIndex = existing.CharacterIndex;
                 }
 
                 return syncItem;

@@ -65,6 +65,7 @@ public sealed class Map
                 player.Y,
                 player.DirX,
                 player.DirY,
+                player.CharacterIndex,
                 player.State,
                 player.CurrentHp,
                 player.MaxHp))
