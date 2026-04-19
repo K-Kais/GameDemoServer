@@ -110,27 +110,25 @@ public sealed class GameManager
             return false;
         }
 
-        if (!map.TryUpdatePosition(playerId, x, y))
+        if (!player.TryUpdatePosition(x, y))
         {
             return false;
         }
-
-        player.X = x;
-        player.Y = y;
         mapId = map.MapId;
         return true;
     }
 
     public bool TryUpdatePlayerInput(
         string playerId,
-        float x,
-        float y,
-        float dirX,
-        float dirY,
-        string state,
+        EntitySyncData input,
         out string? mapId)
     {
         mapId = null;
+        if (input is null)
+        {
+            return false;
+        }
+
         if (!_players.TryGetValue(playerId, out var player))
         {
             return false;
@@ -146,25 +144,8 @@ public sealed class GameManager
             return false;
         }
 
-        var normalizedState = state?.Trim() ?? string.Empty;
-        if (!map.TryUpdateInput(playerId, x, y, dirX, dirY, normalizedState, out var changed))
-        {
-            return false;
-        }
-
         mapId = map.MapId;
-
-        if (!changed)
-        {
-            return true;
-        }
-
-        player.X = x;
-        player.Y = y;
-        player.DirX = dirX;
-        player.DirY = dirY;
-        player.State = normalizedState;
-        EnqueueInputSync(map.MapId, playerId, x, y, dirX, dirY, normalizedState);
+        player.QueueInput(input);
         return true;
     }
 
@@ -202,6 +183,18 @@ public sealed class GameManager
         return Array.Empty<MapPlayerSnapshot>();
     }
 
+    public void UpdateEcsSystems(float deltaTime)
+    {
+        foreach (var map in _maps.Values)
+        {
+            var players = map.GetPlayers();
+            foreach (var player in players)
+            {
+                player.system.Update(player, map, deltaTime);
+            }
+        }
+    }
+
     public async Task FlushPendingInputSyncAsync(CancellationToken cancellationToken = default)
     {
         foreach (var pending in _pendingInputByMap)
@@ -235,15 +228,11 @@ public sealed class GameManager
                 Array.Resize(ref items, index);
             }
 
-            await BroadcastToMapAsync(
-                pending.Key,
-                OpCode.Input,
-                new InputBatchMessage
-                {
-                    MapId = pending.Key,
-                    Players = items
-                },
-                cancellationToken: cancellationToken);
+            await BroadcastToMapAsync(pending.Key, OpCode.Input, new InputBatchMessage
+            {
+                MapId = pending.Key,
+                Players = items
+            }, cancellationToken: cancellationToken);
 
             if (mapPending.IsEmpty)
             {
@@ -332,7 +321,7 @@ public sealed class GameManager
 
         if (existingMaps.Count == 0)
         {
-            return _maps.GetOrAdd($"{normalizedBaseMapId}-1", id => new Map(id, MaxPlayersPerMap));
+            return _maps.GetOrAdd($"{normalizedBaseMapId}-1", id => new Map(id, MaxPlayersPerMap, this));
         }
 
         return CreateNextMapInstance(normalizedBaseMapId);
@@ -352,7 +341,7 @@ public sealed class GameManager
             .Max();
 
         var nextMapId = $"{normalizedBaseMapId}-{maxSuffix + 1}";
-        return _maps.GetOrAdd(nextMapId, id => new Map(id, MaxPlayersPerMap));
+        return _maps.GetOrAdd(nextMapId, id => new Map(id, MaxPlayersPerMap, this));
     }
 
     private static string NormalizeBaseMapId(string? mapId)
@@ -365,18 +354,29 @@ public sealed class GameManager
         return mapId.Trim().ToLowerInvariant();
     }
 
-    private void EnqueueInputSync(string mapId, string playerId, float x, float y, float dirX, float dirY, string state)
+    internal void EnqueueInputSync(string mapId, InputSyncItem syncItem)
     {
         var mapPending = _pendingInputByMap.GetOrAdd(mapId, _ => new ConcurrentDictionary<string, InputSyncItem>());
-        mapPending[playerId] = new InputSyncItem
-        {
-            PlayerId = playerId,
-            X = x,
-            Y = y,
-            DirX = dirX,
-            DirY = dirY,
-            State = state
-        };
+        mapPending.AddOrUpdate(
+            syncItem.PlayerId,
+            syncItem,
+            (_, existing) =>
+            {
+                if (AnimationStateNames.IsDead(syncItem.State))
+                {
+                    syncItem.AttackEvent = false;
+                    return syncItem;
+                }
+
+                if (!syncItem.AttackEvent &&
+                    existing.AttackEvent &&
+                    !AnimationStateNames.IsDead(existing.State))
+                {
+                    syncItem.AttackEvent = true;
+                }
+
+                return syncItem;
+            });
     }
 
     private void RemovePendingInput(string? mapId, string playerId)

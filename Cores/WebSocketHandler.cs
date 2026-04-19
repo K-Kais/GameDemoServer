@@ -279,11 +279,7 @@ public sealed class WebSocketHandler
 
                     if (!_gameManager.TryUpdatePlayerInput(
                             playerId,
-                            request.X,
-                            request.Y,
-                            request.DirX,
-                            request.DirY,
-                            request.State,
+                            request,
                             out _))
                     {
                         await SendErrorAsync(playerId, "Player is not in a map", cancellationToken);

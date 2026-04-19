@@ -17,11 +17,22 @@ public sealed class InputSyncBroadcastService : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         using var timer = new PeriodicTimer(TickInterval);
+        var lastUpdate = DateTime.UtcNow;
 
         try
         {
             while (await timer.WaitForNextTickAsync(stoppingToken))
             {
+                var now = DateTime.UtcNow;
+                var deltaTime = (float)(now - lastUpdate).TotalSeconds;
+                lastUpdate = now;
+
+                if (deltaTime <= 0f || deltaTime > 1f)
+                {
+                    deltaTime = (float)TickInterval.TotalSeconds;
+                }
+
+                _gameManager.UpdateEcsSystems(deltaTime);
                 await _gameManager.FlushPendingInputSyncAsync(stoppingToken);
             }
         }

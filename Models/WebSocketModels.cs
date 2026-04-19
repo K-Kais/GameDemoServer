@@ -25,6 +25,9 @@ public sealed class EntitySyncData
     public float DirX { get; set; }
     public float DirY { get; set; }
     public string State { get; set; } = string.Empty;
+    public bool AttackEvent { get; set; }
+    public bool AttackHitEvent { get; set; }
+    public bool RespawnEvent { get; set; }
 }
 
 public sealed class InputSyncItem
@@ -35,6 +38,9 @@ public sealed class InputSyncItem
     public float DirX { get; set; }
     public float DirY { get; set; }
     public string State { get; set; } = string.Empty;
+    public bool AttackEvent { get; set; }
+    public float CurrentHp { get; set; }
+    public float MaxHp { get; set; }
 }
 
 public sealed class InputBatchMessage
