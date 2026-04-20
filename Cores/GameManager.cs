@@ -17,6 +17,8 @@ public sealed class GameManager
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, InputSyncItem>> _pendingInputByMap = new();
     private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web);
     private readonly object _mapLock = new();
+    private readonly object _skill1ImpactLock = new();
+    private readonly List<ScheduledSkill1Impact> _scheduledSkill1Impacts = new();
     private readonly ILogger<GameManager> _logger;
 
     public GameManager(ILogger<GameManager> logger)
@@ -192,6 +194,37 @@ public sealed class GameManager
             {
                 player.system.Update(player, map, deltaTime);
             }
+        }
+
+        ResolveScheduledSkill1Impacts(deltaTime);
+    }
+
+    internal void ScheduleSkill1Impact(
+        string mapId,
+        string casterPlayerId,
+        string targetPlayerId,
+        float travelSeconds,
+        float damage)
+    {
+        if (string.IsNullOrWhiteSpace(mapId) ||
+            string.IsNullOrWhiteSpace(casterPlayerId) ||
+            string.IsNullOrWhiteSpace(targetPlayerId))
+        {
+            return;
+        }
+
+        var safeTravelSeconds = MathF.Max(0.01f, travelSeconds);
+        var safeDamage = MathF.Max(0f, damage);
+        lock (_skill1ImpactLock)
+        {
+            _scheduledSkill1Impacts.Add(new ScheduledSkill1Impact
+            {
+                MapId = mapId,
+                CasterPlayerId = casterPlayerId,
+                TargetPlayerId = targetPlayerId,
+                RemainingSeconds = safeTravelSeconds,
+                Damage = safeDamage
+            });
         }
     }
 
@@ -380,6 +413,31 @@ public sealed class GameManager
                     syncItem.AttackEvent = true;
                 }
 
+                if (!syncItem.Skill1 &&
+                    existing.Skill1 &&
+                    !AnimationStateNames.IsDead(existing.State))
+                {
+                    syncItem.Skill1 = true;
+                    if (string.IsNullOrWhiteSpace(syncItem.Skill1TargetPlayerId))
+                    {
+                        syncItem.Skill1TargetPlayerId = existing.Skill1TargetPlayerId;
+                    }
+                }
+
+                if (syncItem.Skill1 &&
+                    string.IsNullOrWhiteSpace(syncItem.Skill1TargetPlayerId) &&
+                    !string.IsNullOrWhiteSpace(existing.Skill1TargetPlayerId))
+                {
+                    syncItem.Skill1TargetPlayerId = existing.Skill1TargetPlayerId;
+                }
+
+                if (!syncItem.Skill1HitEvent &&
+                    existing.Skill1HitEvent &&
+                    !AnimationStateNames.IsDead(existing.State))
+                {
+                    syncItem.Skill1HitEvent = true;
+                }
+
                 if (syncItem.CharacterIndex < 0 && existing.CharacterIndex >= 0)
                 {
                     syncItem.CharacterIndex = existing.CharacterIndex;
@@ -438,5 +496,92 @@ public sealed class GameManager
         {
             _logger.LogDebug(ex, "WebSocket already disposed during close");
         }
+    }
+
+    private void ResolveScheduledSkill1Impacts(float deltaTime)
+    {
+        if (deltaTime <= 0f)
+        {
+            return;
+        }
+
+        List<ScheduledSkill1Impact>? dueImpacts = null;
+        lock (_skill1ImpactLock)
+        {
+            if (_scheduledSkill1Impacts.Count == 0)
+            {
+                return;
+            }
+
+            for (var i = _scheduledSkill1Impacts.Count - 1; i >= 0; i--)
+            {
+                var impact = _scheduledSkill1Impacts[i];
+                impact.RemainingSeconds -= deltaTime;
+                if (impact.RemainingSeconds > 0f)
+                {
+                    continue;
+                }
+
+                dueImpacts ??= new List<ScheduledSkill1Impact>();
+                dueImpacts.Add(impact);
+                _scheduledSkill1Impacts.RemoveAt(i);
+            }
+        }
+
+        if (dueImpacts is null || dueImpacts.Count == 0)
+        {
+            return;
+        }
+
+        for (var i = 0; i < dueImpacts.Count; i++)
+        {
+            var impact = dueImpacts[i];
+            if (!_maps.TryGetValue(impact.MapId, out var map))
+            {
+                continue;
+            }
+
+            if (!map.Players.TryGetValue(impact.TargetPlayerId, out var target))
+            {
+                continue;
+            }
+
+            if (target.CurrentHp <= 0f)
+            {
+                continue;
+            }
+
+            target.CurrentHp = MathF.Max(0f, target.CurrentHp - impact.Damage);
+            if (target.CurrentHp <= 0f)
+            {
+                target.State = AnimationStateNames.Dead;
+            }
+
+            EnqueueInputSync(impact.MapId, new InputSyncItem
+            {
+                PlayerId = target.PlayerId,
+                X = target.X,
+                Y = target.Y,
+                DirX = target.DirX,
+                DirY = target.DirY,
+                CharacterIndex = target.CharacterIndex,
+                State = target.State,
+                AttackEvent = false,
+                Skill1 = false,
+                Skill1TargetPlayerId = string.Empty,
+                Skill1HitEvent = true,
+                CurrentHp = target.CurrentHp,
+                MaxHp = target.MaxHp
+            });
+        }
+    }
+
+    private sealed class ScheduledSkill1Impact
+    {
+        public string MapId { get; set; } = string.Empty;
+        public string CasterPlayerId { get; set; } = string.Empty;
+        public string TargetPlayerId { get; set; } = string.Empty;
+        public float RemainingSeconds { get; set; }
+        public float Damage { get; set; }
     }
 }

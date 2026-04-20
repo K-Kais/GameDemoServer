@@ -4,6 +4,9 @@ namespace GameDemoServer.Cores;
 
 public sealed class PlayerSystem : SystemECS
 {
+    private const float Skill1Range = 12f;
+    private const float Skill1ProjectileSpeed = 14f;
+
     public override void Update(EntityDataServer data, Map map, float deltaTime)
     {
         data.TryConsumeInput(out var input);
@@ -66,6 +69,11 @@ public sealed class PlayerSystem : SystemECS
             return;
         }
 
+        var skill1Target = input.Skill1
+            ? FindAttackTarget(data, map, MathF.Max(data.CombatData.AttackRange, Skill1Range))
+            : null;
+        var skill1TargetPlayerId = skill1Target?.PlayerId ?? string.Empty;
+
         map.GameManager.EnqueueInputSync(map.MapId, new InputSyncItem
         {
             PlayerId = data.PlayerId,
@@ -76,40 +84,57 @@ public sealed class PlayerSystem : SystemECS
             CharacterIndex = data.CharacterIndex,
             State = data.State,
             AttackEvent = input.AttackEvent,
+            Skill1 = input.Skill1,
+            Skill1TargetPlayerId = skill1TargetPlayerId,
+            Skill1HitEvent = false,
             CurrentHp = data.CurrentHp,
             MaxHp = data.MaxHp
         });
 
-        if (!input.AttackHitEvent)
+        if (input.AttackHitEvent)
         {
-            return;
+            var attackTarget = FindAttackTarget(data, map, data.CombatData.AttackRange);
+            if (attackTarget != null)
+            {
+                ApplyDamage(attackTarget, data.Damage);
+                map.GameManager.EnqueueInputSync(map.MapId, new InputSyncItem
+                {
+                    PlayerId = attackTarget.PlayerId,
+                    X = attackTarget.X,
+                    Y = attackTarget.Y,
+                    DirX = attackTarget.DirX,
+                    DirY = attackTarget.DirY,
+                    CharacterIndex = attackTarget.CharacterIndex,
+                    State = attackTarget.State,
+                    AttackEvent = false,
+                    Skill1 = false,
+                    Skill1TargetPlayerId = string.Empty,
+                    Skill1HitEvent = false,
+                    CurrentHp = attackTarget.CurrentHp,
+                    MaxHp = attackTarget.MaxHp
+                });
+            }
         }
 
-        var attackTarget = FindAttackTarget(data, map, data.CombatData.AttackRange);
-        if (attackTarget is null)
+        if (skill1Target != null)
         {
-            return;
+            var travelTime = CalculateSkill1TravelTime(data, skill1Target);
+            map.GameManager.ScheduleSkill1Impact(
+                map.MapId,
+                data.PlayerId,
+                skill1Target.PlayerId,
+                travelTime,
+                data.Damage);
         }
+    }
 
-        attackTarget.CurrentHp = MathF.Max(0f, attackTarget.CurrentHp - data.Damage);
-        if (attackTarget.CurrentHp <= 0f)
+    private static void ApplyDamage(EntityDataServer target, float damage)
+    {
+        target.CurrentHp = MathF.Max(0f, target.CurrentHp - MathF.Max(0f, damage));
+        if (target.CurrentHp <= 0f)
         {
-            attackTarget.State = AnimationStateNames.Dead;
+            target.State = AnimationStateNames.Dead;
         }
-
-        map.GameManager.EnqueueInputSync(map.MapId, new InputSyncItem
-        {
-            PlayerId = attackTarget.PlayerId,
-            X = attackTarget.X,
-            Y = attackTarget.Y,
-            DirX = attackTarget.DirX,
-            DirY = attackTarget.DirY,
-            CharacterIndex = attackTarget.CharacterIndex,
-            State = attackTarget.State,
-            AttackEvent = false,
-            CurrentHp = attackTarget.CurrentHp,
-            MaxHp = attackTarget.MaxHp
-        });
     }
 
     private static EntityDataServer? FindAttackTarget(EntityDataServer attacker, Map map, float range)
@@ -189,5 +214,14 @@ public sealed class PlayerSystem : SystemECS
         {
             data.CombatData.AttackRange = EntityCombatData.DefaultAttackRange;
         }
+    }
+
+    private static float CalculateSkill1TravelTime(EntityDataServer caster, EntityDataServer target)
+    {
+        var deltaX = target.X - caster.X;
+        var deltaY = target.Y - caster.Y;
+        var distance = MathF.Sqrt((deltaX * deltaX) + (deltaY * deltaY));
+        var speed = MathF.Max(0.1f, Skill1ProjectileSpeed);
+        return MathF.Max(0.05f, distance / speed);
     }
 }

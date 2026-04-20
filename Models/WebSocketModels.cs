@@ -29,6 +29,7 @@ public sealed class EntitySyncData
     public bool AttackEvent { get; set; }
     public bool AttackHitEvent { get; set; }
     public bool RespawnEvent { get; set; }
+    public bool Skill1 { get; set; }
 }
 
 public sealed class InputSyncItem
@@ -41,6 +42,9 @@ public sealed class InputSyncItem
     public int CharacterIndex { get; set; } = -1;
     public string State { get; set; } = string.Empty;
     public bool AttackEvent { get; set; }
+    public bool Skill1 { get; set; }
+    public string Skill1TargetPlayerId { get; set; } = string.Empty;
+    public bool Skill1HitEvent { get; set; }
     public float CurrentHp { get; set; }
     public float MaxHp { get; set; }
 }

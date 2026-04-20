@@ -15,3 +15,5 @@
 15	controls	$2a$11$/SsuYvaP6NNbJMSEVsKf6ePYJAgGAXpFvvARVEp6BFt95Fjt5uH1C	Controls	controls
 16	controls1	$2a$11$Ru2oHDBZZqQ7yj8s/vBWdu3hB11KJiKm.4gCPzBfLLS5onG1zfRSm	Controls1	controls1
 17	authmenuui5	$2a$11$sPUBvNi9Dzs.aT3kBCTIw.zPISu7hJ/FJhmIw9M.sLWMmlAJdSnj.	AuthMenuUI5	authmenuui5
+18	gagagag123	$2a$11$zAw5IdAzUkwgM97p7h./W.NuLbPPevy8mkmHHS9P4oGNVXuMl/oB.	gagagag123	gagagag123
+19	gagagag1234	$2a$11$zzKWLfj/lVDazDMDgmfGC.B9k3HDfCi8g4T3FmyUGCn/bXlNVqEaS	gagagag1234	gagagag1234

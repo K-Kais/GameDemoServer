@@ -96,6 +96,7 @@ public sealed class EntityDataServer
             _pendingInput.AttackEvent |= input.AttackEvent;
             _pendingInput.AttackHitEvent |= input.AttackHitEvent;
             _pendingInput.RespawnEvent |= input.RespawnEvent;
+            _pendingInput.Skill1 |= input.Skill1;
         }
     }
 
@@ -128,6 +129,7 @@ public sealed class EntityDataServer
             input.AttackEvent ||
             input.AttackHitEvent ||
             input.RespawnEvent ||
+            input.Skill1 ||
             MathF.Abs(X - input.X) > SyncEpsilon ||
             MathF.Abs(Y - input.Y) > SyncEpsilon ||
             MathF.Abs(DirX - input.DirX) > SyncEpsilon ||

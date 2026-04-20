@@ -4,7 +4,7 @@ docker stop GameDemoServer
 
 docker pull tranbinh0708/gamedemoserver ; screen docker run -d --name GameDemoServer -p 5002:8080 -e ASPNETCORE_ENVIRONMENT=ServerDev tranbinh0708/gamedemoserver
 
-
+docker pull tranbinh0708/gamedemoserver ; screen docker run -d --restart unless-stopped --name GameDemoServer -p 5002:8080 -e ASPNETCORE_ENVIRONMENT=ServerDev tranbinh0708/gamedemoserver
 
 docker stop GameDemoServer 2>/dev/null || true && docker pull tranbinh0708/gamedemoserver && screen docker run -p 5002:5002 --name GameDemoServer tranbinh0708/gamedemoserver
 
